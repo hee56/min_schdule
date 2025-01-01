@@ -1,38 +1,46 @@
 import streamlit as st
-import pandas as pd
-import datetime
-import calendar
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
 import json
 import os
+from datetime import datetime, timedelta
+import calendar
+
+def load_data():
+    if os.path.exists('checklist_data.json'):
+        with open('checklist_data.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        'checklist': {},
+        'study_hours': {},
+        'daily_reviews': {}
+    }
+
+def save_data(data):
+    with open('checklist_data.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def get_day_type(date):
+    day = date.weekday()
+    if day == 6:  # Sunday
+        return 'sunday'
+    elif day == 5:  # Saturday
+        return 'saturday'
+    elif day in [0, 2, 4]:  # Monday, Wednesday, Friday
+        return 'mwf'
+    else:  # Tuesday, Thursday
+        return 'tt'
 
 def main():
     st.title('일일 학습 체크리스트')
 
-    # 초기 상태 설정
-    if 'checklist_data' not in st.session_state:
-        st.session_state.checklist_data = {}
-    
-    if 'study_hours' not in st.session_state:
-        st.session_state.study_hours = {}
+    # 데이터 로드
+    if 'data' not in st.session_state:
+        st.session_state.data = load_data()
 
     # 날짜 선택
     selected_date = st.date_input("날짜 선택", datetime.now())
     date_key = selected_date.strftime("%Y-%m-%d")
 
     # 요일별 스케줄 정의
-    def get_day_type(date):
-        day = date.weekday()
-        if day == 6:  # Sunday
-            return 'sunday'
-        elif day == 5:  # Saturday
-            return 'saturday'
-        elif day in [0, 2, 4]:  # Monday, Wednesday, Friday
-            return 'mwf'
-        else:  # Tuesday, Thursday
-            return 'tt'
-
     schedules = {
         'mwf': [
             {'id': 'wake', 'label': '기상 시간 (6:00)', 'time': '6:00'},
@@ -84,18 +92,18 @@ def main():
 
     st.subheader('오늘의 체크리스트')
     
-    # 체크리스트 데이터 초기화
-    if date_key not in st.session_state.checklist_data:
-        st.session_state.checklist_data[date_key] = {}
+    # 데이터 초기화
+    if date_key not in st.session_state.data['checklist']:
+        st.session_state.data['checklist'][date_key] = {}
 
-    # 체크박스 생성
+    # 체크박스 생성 및 상태 저장
     for item in current_schedule:
         checked = st.checkbox(
-            f"{item['label']} ({item['time']})", 
+            f"{item['label']} ({item['time']})",
             key=f"{date_key}_{item['id']}",
-            value=st.session_state.checklist_data[date_key].get(item['id'], False)
+            value=st.session_state.data['checklist'][date_key].get(item['id'], False)
         )
-        st.session_state.checklist_data[date_key][item['id']] = checked
+        st.session_state.data['checklist'][date_key][item['id']] = checked
 
     # 학습 시간 입력
     st.subheader('학습 시간 기록')
@@ -103,10 +111,10 @@ def main():
         '실제 학습 시간 (시간)',
         min_value=0.0,
         max_value=24.0,
-        value=float(st.session_state.study_hours.get(date_key, 0)),
+        value=float(st.session_state.data['study_hours'].get(date_key, 0)),
         step=0.5
     )
-    st.session_state.study_hours[date_key] = study_hours
+    st.session_state.data['study_hours'][date_key] = study_hours
 
     # 학습 평가
     target_hours = target_study_hours[day_type]
@@ -122,109 +130,73 @@ def main():
 
     st.markdown(f"**학습 평가:** :{color}[{evaluation}]")
 
-    # 월간 캘린더 표시
-    st.subheader('월간 학습 현황')
+    # 일일 총평
+    st.subheader('오늘의 총평')
+    daily_review = st.text_area(
+        "오늘 하루를 돌아보며...",
+        value=st.session_state.data['daily_reviews'].get(date_key, ''),
+        height=150,
+        placeholder="오늘의 성과, 부족한 점, 내일의 계획 등을 기록해보세요."
+    )
+    st.session_state.data['daily_reviews'][date_key] = daily_review
+
+    # 월간 리뷰 표시
+    st.subheader('이번 달 기록 확인')
     month_start = selected_date.replace(day=1)
     month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
     
-    # 캘린더 데이터 생성
-    calendar_data = []
-    current_date = month_start
-    while current_date <= month_end:
-        date_str = current_date.strftime("%Y-%m-%d")
-        day_type = get_day_type(current_date)
-        actual_hours = st.session_state.study_hours.get(date_str, 0)
-        target = target_study_hours[day_type]
+    current_month_data = {
+        date: {
+            'study_hours': st.session_state.data['study_hours'].get(date, 0),
+            'review': st.session_state.data['daily_reviews'].get(date, '')
+        }
+        for date in [
+            (month_start + timedelta(days=x)).strftime("%Y-%m-%d")
+            for x in range((month_end - month_start).days + 1)
+        ]
+    }
+
+    # 달력 형태로 데이터 표시
+    cols = st.columns(7)
+    for i, day in enumerate(['일', '월', '화', '수', '목', '금', '토']):
+        cols[i].markdown(f"**{day}**")
+
+    # 첫 주 시작 요일까지의 빈 칸 처리
+    first_day_weekday = month_start.weekday()
+    for i in range((first_day_weekday + 1) % 7):
+        cols[i].write("")
+
+    # 날짜별 데이터 표시
+    day_count = (first_day_weekday + 1) % 7
+    for date, data in current_month_data.items():
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
         
-        if actual_hours >= target:
-            status = 'GOOD'
-        elif actual_hours > 0:
-            status = 'BAD'
+        if data['study_hours'] >= target_study_hours[get_day_type(date_obj)]:
+            color = 'green'
+        elif data['study_hours'] > 0:
+            color = 'red'
         else:
-            status = '미입력'
+            color = 'gray'
             
-        calendar_data.append({
-            'date': date_str,
-            'day': current_date.day,
-            'status': status
-        })
-        current_date += timedelta(days=1)
-
-    # 캘린더 표시를 위한 데이터프레임 생성
-    calendar_df = pd.DataFrame(calendar_data)
-    calendar_df['week'] = pd.to_datetime(calendar_df['date']).dt.isocalendar().week
-    calendar_df['weekday'] = pd.to_datetime(calendar_df['date']).dt.dayofweek
-
-    # Plotly로 캘린더 히트맵 생성
-    weeks = calendar_df['week'].unique()
-    weekdays = ['월', '화', '수', '목', '금', '토', '일']
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=[[0 for _ in range(7)] for _ in range(len(weeks))],
-        customdata=[['' for _ in range(7)] for _ in range(len(weeks))],
-        text=[['' for _ in range(7)] for _ in range(len(weeks))],
-        colorscale=[
-            [0, 'white'],
-            [0.33, '#ffcdd2'],  # Bad - 연한 빨강
-            [0.66, '#c8e6c9'],  # Good - 연한 초록
-            [1, '#f5f5f5']      # 미입력 - 회색
-        ],
-        showscale=False
-    ))
-
-    # 캘린더 데이터 채우기
-    for _, row in calendar_df.iterrows():
-        week_idx = list(weeks).index(row['week'])
-        day_idx = row['weekday']
-        
-        if row['status'] == 'GOOD':
-            value = 0.66
-        elif row['status'] == 'BAD':
-            value = 0.33
-        else:
-            value = 1
+        cols[day_count].markdown(f"**{date_obj.day}**")
+        if data['study_hours'] > 0:
+            cols[day_count].markdown(f":{color}[{data['study_hours']}시간]")
+        if data['review']:
+            cols[day_count].markdown("📝")
             
-        fig.data[0].z[week_idx][day_idx] = value
-        fig.data[0].text[week_idx][day_idx] = str(row['day'])
+        day_count = (day_count + 1) % 7
 
-    # 캘린더 레이아웃 설정
-    fig.update_layout(
-        height=300,
-        xaxis=dict(
-            ticktext=weekdays,
-            tickvals=list(range(len(weekdays))),
-            showgrid=True
-        ),
-        yaxis=dict(
-            showgrid=True,
-            scaleanchor='x'
-        )
-    )
+    # 데이터 저장
+    save_data(st.session_state.data)
 
-    st.plotly_chart(fig, use_container_width=True)
-
-    # CSV 다운로드 버튼
-    if st.button('CSV 다운로드'):
-        # 데이터 준비
-        data_list = []
-        for date_str in st.session_state.checklist_data:
-            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-            day_type = get_day_type(date_obj)
-            data_list.append({
-                '날짜': date_str,
-                '요일': date_obj.strftime('%A'),
-                '목표학습시간': target_study_hours[day_type],
-                '실제학습시간': st.session_state.study_hours.get(date_str, 0),
-                **st.session_state.checklist_data[date_str]
-            })
-        
-        df = pd.DataFrame(data_list)
-        csv = df.to_csv(index=False)
+    # 데이터 백업 다운로드 버튼
+    if st.button('데이터 백업'):
+        json_str = json.dumps(st.session_state.data, ensure_ascii=False, indent=2)
         st.download_button(
-            label="CSV 파일 다운로드",
-            data=csv,
-            file_name="학습체크리스트.csv",
-            mime="text/csv"
+            label="JSON 파일 다운로드",
+            data=json_str,
+            file_name="checklist_backup.json",
+            mime="application/json"
         )
 
 if __name__ == "__main__":
