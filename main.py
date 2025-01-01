@@ -91,7 +91,8 @@ def main():
                 with cols[idx]:
                     if day is not None:
                         date_str = f"{selected_date.year}-{selected_date.month:02d}-{day:02d}"
-                        study_hours = st.session_state.data['study_hours'].get(date_str, 0)
+                        study_records = st.session_state.data['study_hours'].get(date_str, [])
+                        total_hours = sum(record['hours'] for record in study_records)
                         has_review = st.session_state.data['daily_reviews'].get(date_str, '')
                         
                         # 날짜 색상 설정
@@ -103,8 +104,8 @@ def main():
                             st.markdown(f"<h4 style='text-align: center;'>{day}</h4>", unsafe_allow_html=True)
                         
                         # 학습 시간 표시
-                        if study_hours > 0:
-                            st.markdown(f"<p style='text-align: center;'>{study_hours}시간</p>", unsafe_allow_html=True)
+                        if total_hours > 0:
+                            st.markdown(f"<p style='text-align: center;'>{total_hours:.1f}시간</p>", unsafe_allow_html=True)
                             
                         # 총평 아이콘 표시
                         if has_review:
@@ -180,21 +181,55 @@ def main():
 
         # 학습 시간 입력
         st.subheader('학습 시간 기록')
-        study_hours = st.number_input(
-            '실제 학습 시간 (시간)',
-            min_value=0.0,
-            max_value=24.0,
-            value=float(st.session_state.data['study_hours'].get(date_key, 0)),
-            step=0.5
-        )
-        st.session_state.data['study_hours'][date_key] = study_hours
+        
+        # 학습 시간 기록 초기화
+        if date_key not in st.session_state.data['study_hours']:
+            st.session_state.data['study_hours'][date_key] = []
+
+        # 기존 학습 기록 표시
+        total_hours = 0
+        if st.session_state.data['study_hours'][date_key]:
+            st.write("오늘의 학습 기록:")
+            for idx, record in enumerate(st.session_state.data['study_hours'][date_key]):
+                total_hours += record['hours']
+                st.markdown(f"- {record['hours']}시간: {record['memo']}")
+            
+            st.markdown(f"**총 학습 시간: {total_hours:.1f}시간**")
+            st.markdown("---")
+
+        # 새로운 학습 시간 입력
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            new_hours = st.number_input(
+                '학습 시간',
+                min_value=0.0,
+                max_value=24.0,
+                value=0.0,
+                step=0.5
+            )
+        with col2:
+            memo = st.text_input('학습 내용 (예: 수학 문제풀이, 영어 독해)', key='new_study_memo')
+
+        if st.button('학습 시간 추가'):
+            if new_hours > 0:
+                st.session_state.data['study_hours'][date_key].append({
+                    'hours': new_hours,
+                    'memo': memo,
+                    'timestamp': datetime.now().strftime('%H:%M')
+                })
+                st.rerun()
+
+        # 학습 시간 초기화 버튼
+        if st.button('오늘 학습 기록 초기화'):
+            st.session_state.data['study_hours'][date_key] = []
+            st.rerun()
 
         # 학습 평가
         target_hours = target_study_hours[day_type]
-        if study_hours >= target_hours:
+        if total_hours >= target_hours:
             evaluation = 'GOOD'
             color = 'green'
-        elif study_hours > 0:
+        elif total_hours > 0:
             evaluation = 'BAD'
             color = 'red'
         else:
