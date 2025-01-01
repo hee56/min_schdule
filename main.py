@@ -140,128 +140,75 @@ def main():
     )
     st.session_state.data['daily_reviews'][date_key] = daily_review
 
-    # 월간 리뷰 표시
-    st.subheader('이번 달 기록 확인')
-    month_start = selected_date.replace(day=1)
-    month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-    
-    current_month_data = {
-        date: {
-            'study_hours': st.session_state.data['study_hours'].get(date, 0),
-            'review': st.session_state.data['daily_reviews'].get(date, '')
-        }
-        for date in [
-            (month_start + timedelta(days=x)).strftime("%Y-%m-%d")
-            for x in range((month_end - month_start).days + 1)
-        ]
-    }
+    # 달력 표시를 위한 함수
+    def create_calendar_grid():
+        month_matrix = []
+        week = []
+        first_day = calendar.monthrange(selected_date.year, selected_date.month)[0]
+        days_in_month = calendar.monthrange(selected_date.year, selected_date.month)[1]
+        
+        # 첫 주 빈 칸 채우기
+        for i in range(first_day):
+            week.append(None)
+            
+        # 날짜 채우기
+        for day in range(1, days_in_month + 1):
+            week.append(day)
+            if len(week) == 7:
+                month_matrix.append(week)
+                week = []
+                
+        # 마지막 주 빈 칸 채우기
+        if week:
+            while len(week) < 7:
+                week.append(None)
+            month_matrix.append(week)
+            
+        return month_matrix
 
-    # 달력 HTML 생성
-    calendar_html = """
-    <style>
-        .calendar-table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: center;
-        }
-        .calendar-table th {
-            background-color: #f0f2f6;
-            padding: 10px;
-            border: 1px solid #ddd;
-            font-weight: bold;
-        }
-        .calendar-table td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            height: 80px;
-            vertical-align: top;
-        }
-        .date-number {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .study-hours {
-            font-size: 14px;
-            margin-bottom: 3px;
-        }
-        .review-icon {
-            font-size: 12px;
-        }
-        .sunday { color: #ff4b4b; }
-        .saturday { color: #4b7bff; }
-        .study-good { color: #28a745; }
-        .study-bad { color: #dc3545; }
-        .empty-cell {
-            background-color: #f8f9fa;
-        }
-    </style>
-    <table class="calendar-table">
-        <tr>
-            <th class="sunday">일</th>
-            <th>월</th>
-            <th>화</th>
-            <th>수</th>
-            <th>목</th>
-            <th>금</th>
-            <th class="saturday">토</th>
-        </tr>
-    """
+    # 달력 생성
+    st.write("#### 월간 기록")
+    month_matrix = create_calendar_grid()
+    
+    # 요일 헤더
+    cols = st.columns(7)
+    weekdays = ['일', '월', '화', '수', '목', '금', '토']
+    for idx, day in enumerate(weekdays):
+        with cols[idx]:
+            if idx == 0:  # 일요일
+                st.markdown(f"<h5 style='text-align: center; color: red;'>{day}</h5>", unsafe_allow_html=True)
+            elif idx == 6:  # 토요일
+                st.markdown(f"<h5 style='text-align: center; color: blue;'>{day}</h5>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<h5 style='text-align: center;'>{day}</h5>", unsafe_allow_html=True)
 
-    # 달력 데이터 채우기
-    first_day_weekday = (month_start.weekday() + 1) % 7  # 0 = Sunday
-    day_count = 0
-    
-    # 첫 주 시작
-    calendar_html += "<tr>"
-    
-    # 첫 주 빈 칸 처리
-    for i in range(first_day_weekday):
-        calendar_html += '<td class="empty-cell"></td>'
-        day_count += 1
-    
-    # 날짜 채우기
-    for date, data in current_month_data.items():
-        date_obj = datetime.strptime(date, "%Y-%m-%d")
-        
-        if day_count % 7 == 0:
-            calendar_html += "<tr>"
-            
-        # 요일별 클래스 설정
-        day_class = ""
-        if day_count % 7 == 0:
-            day_class = "sunday"
-        elif day_count % 7 == 6:
-            day_class = "saturday"
-            
-        # 학습 시간 평가
-        study_class = ""
-        if data['study_hours'] >= target_study_hours[get_day_type(date_obj)]:
-            study_class = "study-good"
-        elif data['study_hours'] > 0:
-            study_class = "study-bad"
-            
-        calendar_html += f"""
-            <td>
-                <div class="date-number {day_class}">{date_obj.day}</div>
-                {f'<div class="study-hours {study_class}">{data["study_hours"]}시간</div>' if data['study_hours'] > 0 else ''}
-                {f'<div class="review-icon">📝</div>' if data['review'] else ''}
-            </td>
-        """
-        
-        day_count += 1
-        if day_count % 7 == 0:
-            calendar_html += "</tr>"
-    
-    # 마지막 주 빈 칸 처리
-    while day_count % 7 != 0:
-        calendar_html += '<td class="empty-cell"></td>'
-        day_count += 1
-        
-    calendar_html += "</table>"
-    
-    # HTML 렌더링
-    st.markdown(calendar_html, unsafe_allow_html=True)
+    # 달력 그리드 생성
+    for week in month_matrix:
+        cols = st.columns(7)
+        for idx, day in enumerate(week):
+            with cols[idx]:
+                if day is not None:
+                    date_str = f"{selected_date.year}-{selected_date.month:02d}-{day:02d}"
+                    study_hours = st.session_state.data['study_hours'].get(date_str, 0)
+                    has_review = st.session_state.data['daily_reviews'].get(date_str, '')
+                    
+                    # 날짜 색상 설정
+                    if idx == 0:  # 일요일
+                        st.markdown(f"<h4 style='text-align: center; color: red;'>{day}</h4>", unsafe_allow_html=True)
+                    elif idx == 6:  # 토요일
+                        st.markdown(f"<h4 style='text-align: center; color: blue;'>{day}</h4>", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"<h4 style='text-align: center;'>{day}</h4>", unsafe_allow_html=True)
+                    
+                    # 학습 시간 표시
+                    if study_hours > 0:
+                        st.markdown(f"<p style='text-align: center;'>{study_hours}시간</p>", unsafe_allow_html=True)
+                        
+                    # 총평 아이콘 표시
+                    if has_review:
+                        st.markdown("<p style='text-align: center;'>📝</p>", unsafe_allow_html=True)
+                else:
+                    st.write("")  # 빈 칸
 
     # 데이터 저장
     save_data(st.session_state.data)
