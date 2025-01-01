@@ -7,7 +7,21 @@ import calendar
 def load_data():
     if os.path.exists('checklist_data.json'):
         with open('checklist_data.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            
+            # 이전 형식의 study_hours 데이터를 새로운 형식으로 변환
+            if 'study_hours' in data:
+                converted_hours = {}
+                for date, hours in data['study_hours'].items():
+                    if isinstance(hours, (int, float)):
+                        converted_hours[date] = [
+                            {'hours': float(hours), 'memo': '이전 기록', 'timestamp': '00:00'}
+                        ]
+                    else:
+                        converted_hours[date] = hours
+                data['study_hours'] = converted_hours
+            
+            return data
     return {
         'checklist': {},
         'study_hours': {},
@@ -92,6 +106,9 @@ def main():
                     if day is not None:
                         date_str = f"{selected_date.year}-{selected_date.month:02d}-{day:02d}"
                         study_records = st.session_state.data['study_hours'].get(date_str, [])
+                        if isinstance(study_records, (int, float)):
+                            study_records = [{'hours': float(study_records), 'memo': '이전 기록', 'timestamp': '00:00'}]
+                            st.session_state.data['study_hours'][date_str] = study_records
                         total_hours = sum(record['hours'] for record in study_records)
                         has_review = st.session_state.data['daily_reviews'].get(date_str, '')
                         
@@ -185,6 +202,14 @@ def main():
         # 학습 시간 기록 초기화
         if date_key not in st.session_state.data['study_hours']:
             st.session_state.data['study_hours'][date_key] = []
+        
+        # 이전 형식의 데이터를 새로운 형식으로 변환
+        if isinstance(st.session_state.data['study_hours'].get(date_key), (int, float)):
+            st.session_state.data['study_hours'][date_key] = [{
+                'hours': float(st.session_state.data['study_hours'][date_key]),
+                'memo': '이전 기록',
+                'timestamp': '00:00'
+            }]
 
         # 기존 학습 기록 표시
         total_hours = 0
