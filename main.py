@@ -36,9 +36,57 @@ def main():
     if 'data' not in st.session_state:
         st.session_state.data = load_data()
 
-    # 날짜 선택
-    selected_date = st.date_input("날짜 선택", datetime.now())
-    date_key = selected_date.strftime("%Y-%m-%d")
+    # 화면을 왼쪽과 오른쪽으로 분할
+    left_col, right_col = st.columns([4, 6])  # 비율 4:6으로 분할
+
+    with left_col:
+        st.markdown("### 월간 기록")
+        month_matrix = create_calendar_grid()
+        
+        # 요일 헤더
+        cols = st.columns(7)
+        weekdays = ['일', '월', '화', '수', '목', '금', '토']
+        for idx, day in enumerate(weekdays):
+            with cols[idx]:
+                if idx == 0:  # 일요일
+                    st.markdown(f"<h5 style='text-align: center; color: red;'>{day}</h5>", unsafe_allow_html=True)
+                elif idx == 6:  # 토요일
+                    st.markdown(f"<h5 style='text-align: center; color: blue;'>{day}</h5>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<h5 style='text-align: center;'>{day}</h5>", unsafe_allow_html=True)
+
+        # 달력 그리드 생성
+        for week in month_matrix:
+            cols = st.columns(7)
+            for idx, day in enumerate(week):
+                with cols[idx]:
+                    if day is not None:
+                        date_str = f"{selected_date.year}-{selected_date.month:02d}-{day:02d}"
+                        study_hours = st.session_state.data['study_hours'].get(date_str, 0)
+                        has_review = st.session_state.data['daily_reviews'].get(date_str, '')
+                        
+                        # 날짜 색상 설정
+                        if idx == 0:  # 일요일
+                            st.markdown(f"<h4 style='text-align: center; color: red;'>{day}</h4>", unsafe_allow_html=True)
+                        elif idx == 6:  # 토요일
+                            st.markdown(f"<h4 style='text-align: center; color: blue;'>{day}</h4>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<h4 style='text-align: center;'>{day}</h4>", unsafe_allow_html=True)
+                        
+                        # 학습 시간 표시
+                        if study_hours > 0:
+                            st.markdown(f"<p style='text-align: center;'>{study_hours}시간</p>", unsafe_allow_html=True)
+                            
+                        # 총평 아이콘 표시
+                        if has_review:
+                            st.markdown("<p style='text-align: center;'>📝</p>", unsafe_allow_html=True)
+                    else:
+                        st.write("")  # 빈 칸
+
+    with right_col:
+        # 날짜 선택
+        selected_date = st.date_input("날짜 선택", datetime.now())
+        date_key = selected_date.strftime("%Y-%m-%d")
 
     # 요일별 스케줄 정의
     schedules = {
@@ -166,49 +214,7 @@ def main():
             
         return month_matrix
 
-    # 달력 생성
-    st.write("#### 월간 기록")
-    month_matrix = create_calendar_grid()
-    
-    # 요일 헤더
-    cols = st.columns(7)
-    weekdays = ['일', '월', '화', '수', '목', '금', '토']
-    for idx, day in enumerate(weekdays):
-        with cols[idx]:
-            if idx == 0:  # 일요일
-                st.markdown(f"<h5 style='text-align: center; color: red;'>{day}</h5>", unsafe_allow_html=True)
-            elif idx == 6:  # 토요일
-                st.markdown(f"<h5 style='text-align: center; color: blue;'>{day}</h5>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<h5 style='text-align: center;'>{day}</h5>", unsafe_allow_html=True)
 
-    # 달력 그리드 생성
-    for week in month_matrix:
-        cols = st.columns(7)
-        for idx, day in enumerate(week):
-            with cols[idx]:
-                if day is not None:
-                    date_str = f"{selected_date.year}-{selected_date.month:02d}-{day:02d}"
-                    study_hours = st.session_state.data['study_hours'].get(date_str, 0)
-                    has_review = st.session_state.data['daily_reviews'].get(date_str, '')
-                    
-                    # 날짜 색상 설정
-                    if idx == 0:  # 일요일
-                        st.markdown(f"<h4 style='text-align: center; color: red;'>{day}</h4>", unsafe_allow_html=True)
-                    elif idx == 6:  # 토요일
-                        st.markdown(f"<h4 style='text-align: center; color: blue;'>{day}</h4>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<h4 style='text-align: center;'>{day}</h4>", unsafe_allow_html=True)
-                    
-                    # 학습 시간 표시
-                    if study_hours > 0:
-                        st.markdown(f"<p style='text-align: center;'>{study_hours}시간</p>", unsafe_allow_html=True)
-                        
-                    # 총평 아이콘 표시
-                    if has_review:
-                        st.markdown("<p style='text-align: center;'>📝</p>", unsafe_allow_html=True)
-                else:
-                    st.write("")  # 빈 칸
 
     # 데이터 저장
     save_data(st.session_state.data)
