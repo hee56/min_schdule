@@ -156,35 +156,112 @@ def main():
         ]
     }
 
-    # 달력 형태로 데이터 표시
-    cols = st.columns(7)
-    for i, day in enumerate(['일', '월', '화', '수', '목', '금', '토']):
-        cols[i].markdown(f"**{day}**")
+    # 달력 HTML 생성
+    calendar_html = """
+    <style>
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center;
+        }
+        .calendar-table th {
+            background-color: #f0f2f6;
+            padding: 10px;
+            border: 1px solid #ddd;
+            font-weight: bold;
+        }
+        .calendar-table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            height: 80px;
+            vertical-align: top;
+        }
+        .date-number {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .study-hours {
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+        .review-icon {
+            font-size: 12px;
+        }
+        .sunday { color: #ff4b4b; }
+        .saturday { color: #4b7bff; }
+        .study-good { color: #28a745; }
+        .study-bad { color: #dc3545; }
+        .empty-cell {
+            background-color: #f8f9fa;
+        }
+    </style>
+    <table class="calendar-table">
+        <tr>
+            <th class="sunday">일</th>
+            <th>월</th>
+            <th>화</th>
+            <th>수</th>
+            <th>목</th>
+            <th>금</th>
+            <th class="saturday">토</th>
+        </tr>
+    """
 
-    # 첫 주 시작 요일까지의 빈 칸 처리
-    first_day_weekday = month_start.weekday()
-    for i in range((first_day_weekday + 1) % 7):
-        cols[i].write("")
-
-    # 날짜별 데이터 표시
-    day_count = (first_day_weekday + 1) % 7
+    # 달력 데이터 채우기
+    first_day_weekday = (month_start.weekday() + 1) % 7  # 0 = Sunday
+    day_count = 0
+    
+    # 첫 주 시작
+    calendar_html += "<tr>"
+    
+    # 첫 주 빈 칸 처리
+    for i in range(first_day_weekday):
+        calendar_html += '<td class="empty-cell"></td>'
+        day_count += 1
+    
+    # 날짜 채우기
     for date, data in current_month_data.items():
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         
+        if day_count % 7 == 0:
+            calendar_html += "<tr>"
+            
+        # 요일별 클래스 설정
+        day_class = ""
+        if day_count % 7 == 0:
+            day_class = "sunday"
+        elif day_count % 7 == 6:
+            day_class = "saturday"
+            
+        # 학습 시간 평가
+        study_class = ""
         if data['study_hours'] >= target_study_hours[get_day_type(date_obj)]:
-            color = 'green'
+            study_class = "study-good"
         elif data['study_hours'] > 0:
-            color = 'red'
-        else:
-            color = 'gray'
+            study_class = "study-bad"
             
-        cols[day_count].markdown(f"**{date_obj.day}**")
-        if data['study_hours'] > 0:
-            cols[day_count].markdown(f":{color}[{data['study_hours']}시간]")
-        if data['review']:
-            cols[day_count].markdown("📝")
-            
-        day_count = (day_count + 1) % 7
+        calendar_html += f"""
+            <td>
+                <div class="date-number {day_class}">{date_obj.day}</div>
+                {f'<div class="study-hours {study_class}">{data["study_hours"]}시간</div>' if data['study_hours'] > 0 else ''}
+                {f'<div class="review-icon">📝</div>' if data['review'] else ''}
+            </td>
+        """
+        
+        day_count += 1
+        if day_count % 7 == 0:
+            calendar_html += "</tr>"
+    
+    # 마지막 주 빈 칸 처리
+    while day_count % 7 != 0:
+        calendar_html += '<td class="empty-cell"></td>'
+        day_count += 1
+        
+    calendar_html += "</table>"
+    
+    # HTML 렌더링
+    st.markdown(calendar_html, unsafe_allow_html=True)
 
     # 데이터 저장
     save_data(st.session_state.data)
